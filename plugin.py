@@ -1,12 +1,13 @@
 from glob import glob
 import os
+import shutil
 import subprocess
 
 import sublime
 import sublime_plugin
 
 
-SUBL_BINARY = 'c:\\Dev\\Sublime Text 3\\subl.exe'
+LISTENER_KEY = 'OpenTheProjectListener'
 KNOWN_WINDOWS = set()
 
 
@@ -49,8 +50,17 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
         if len(paths) > 1:
             window.status_message('More that one project file.')
 
+        settings = sublime.load_settings('OpenTheProject.sublime-settings')
+
+        bin = settings.get('subl') or shutil.which('subl')
+        if not bin:
+            window.status_message(
+                'No `which subl`. Fill in a value in the settings')
+            open_settings_and_maybe_rerun(window)
+            return
+
         path = paths[0]
-        cmd = [SUBL_BINARY, path]
+        cmd = [bin, path]
         try:
             subprocess.Popen(cmd, startupinfo=create_startupinfo())
         except OSError:
@@ -67,3 +77,21 @@ def create_startupinfo():
         return info
 
     return None
+
+
+def open_settings_and_maybe_rerun(window):
+    settings = sublime.load_settings('OpenTheProject.sublime-settings')
+
+    def listen_for_settings_change():
+        settings.clear_on_change(LISTENER_KEY)
+        window.run_command('open_the_project_instead')
+
+    settings.add_on_change(LISTENER_KEY, listen_for_settings_change)
+    window.run_command('edit_settings', {
+        "base_file":
+            "${packages}/OpenTheProject/"
+            "OpenTheProject.sublime-settings",
+        "default":
+            "// OpenTheProject Settings - User\n"
+            "{\n\t\"subl\": \"$0\"\n}\n"
+    })

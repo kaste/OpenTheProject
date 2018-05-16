@@ -1,0 +1,5 @@
+{
+    // We use `which subl` to find the binary automatically,
+    // but you can point to the binary explicitly here
+    "subl": ""
+}
