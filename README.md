@@ -1,13 +1,13 @@
 # Hi
 
-The plugin automatically opens a folder as a project. :confused:
+The plugin automatically opens a folder as a project.
 
-Huh? So, you usually type 
+:confused:? So, you usually type 
 
 ```
 subl <folder>
 ```
 
-But this opens the folder not bound to any project data or project settings. :cry:
+But this opens the folder not bound to any project data or project settings. :cry:  
 
-We can fix that. If there is a `*.sublime-project` in that folder, we just open that project! :wink:
+We can fix that. :wink: If there is a `*.sublime-project` in that folder, we just open that project!
