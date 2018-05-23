@@ -94,7 +94,14 @@ def open_settings_and_maybe_rerun(window):
         "base_file":
             "${packages}/OpenTheProject/"
             "OpenTheProject.sublime-settings",
-        "default":
-            "// OpenTheProject Settings - User\n"
-            "{\n\t\"subl\": \"$0\"\n}\n"
+        "default": DEFAULT_SETTINGS
     })
+
+
+DEFAULT_SETTINGS = """
+// OpenTheProject Settings - User
+{
+    // Absolute path to subl[.exe] binary
+    "subl": "$0"
+}
+"""
