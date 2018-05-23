@@ -47,8 +47,11 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
         paths = glob(pattern)
         if not paths:
             window.status_message('No project file in first folder')
+            return
+
         if len(paths) > 1:
             window.status_message('More that one project file.')
+            return
 
         settings = sublime.load_settings('OpenTheProject.sublime-settings')
 
