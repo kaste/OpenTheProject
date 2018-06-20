@@ -2,5 +2,9 @@
     {
         "caption": "Open the project instead",
         "command": "open_the_project_instead"
-    }
+    },
+    {
+        "caption": "Create Project File: from first open folder",
+        "command": "create_std_project_file"
+    },
 ]

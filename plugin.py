@@ -7,6 +7,19 @@ import sublime_plugin
 
 
 KNOWN_WINDOWS = set()
+PROJECT_TEMPLATE = """
+{
+    "folders": [
+        {
+            "path": "."
+        },
+    ],
+
+    "settings": {
+    }
+}
+
+"""
 
 
 class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
@@ -20,7 +33,44 @@ class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
             return
 
         KNOWN_WINDOWS.add(wid)
+        window.run_command('create_std_project_file')
         window.run_command('open_the_project_instead')
+
+
+class create_std_project_file(sublime_plugin.WindowCommand):
+    def is_enabled(self):
+        window = self.window
+        return not window.project_file_name() and bool(window.folders())
+
+    def run(self):
+        window = self.window
+
+        folder = window.folders()[0]
+        dirname = os.path.basename(folder)
+
+        basename = dirname + '.sublime-project'
+        project_file_name = os.path.join(folder, basename)
+        if os.path.exists(project_file_name):
+            window.status_message(
+                "Project file '{}' already exists.".format(basename)
+            )
+            return
+
+        items = ['Create project file {!r}'.format(basename), 'No, thanks']
+
+        def on_done(result):
+            if result != 0:
+                return  # 'No' or cancelled
+
+            with open(project_file_name, 'w') as file:
+                file.write(PROJECT_TEMPLATE)
+
+            window.status_message(
+                'Created project file `{}`'.format(project_file_name)
+            )
+            window.run_command('open_the_project_instead')
+
+        window.show_quick_panel(items, on_done)
 
 
 class open_the_project_instead(sublime_plugin.WindowCommand):
