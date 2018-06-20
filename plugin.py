@@ -58,7 +58,8 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
         bin = settings.get('subl') or shutil.which('subl')
         if not bin:
             window.status_message(
-                'No `which subl`. Fill in a value in the settings')
+                'No `which subl`. Fill in a value in the settings'
+            )
             open_settings_and_maybe_rerun(window)
             return
 
@@ -70,7 +71,8 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
             raise
         else:
             sublime.set_timeout_async(
-                lambda: window.run_command('close_window'), 100)
+                lambda: window.run_command('close_window'), 100
+            )
 
 
 def create_startupinfo():
@@ -90,12 +92,14 @@ def open_settings_and_maybe_rerun(window):
         window.run_command('open_the_project_instead')
 
     settings.add_on_change(LISTENER_KEY, listen_for_settings_change)
-    window.run_command('edit_settings', {
-        "base_file":
-            "${packages}/OpenTheProject/"
+    window.run_command(
+        'edit_settings',
+        {
+            "base_file": "${packages}/OpenTheProject/"
             "OpenTheProject.sublime-settings",
-        "default": DEFAULT_SETTINGS
-    })
+            "default": DEFAULT_SETTINGS,
+        },
+    )
 
 
 DEFAULT_SETTINGS = """
