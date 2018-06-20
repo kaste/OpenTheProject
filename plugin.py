@@ -6,7 +6,6 @@ import sublime
 import sublime_plugin
 
 
-LISTENER_KEY = 'OpenTheProjectListener'
 KNOWN_WINDOWS = set()
 
 
