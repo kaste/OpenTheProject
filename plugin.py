@@ -1,6 +1,5 @@
 from glob import glob
 import os
-import shutil
 import subprocess
 
 import sublime
@@ -44,16 +43,7 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
             window.status_message('More that one project file.')
             return
 
-        settings = sublime.load_settings('OpenTheProject.sublime-settings')
-
-        bin = settings.get('subl') or shutil.which('subl')
-        if not bin:
-            window.status_message(
-                'No `which subl`. Fill in a value in the settings'
-            )
-            open_settings_and_maybe_rerun(window)
-            return
-
+        bin = get_executable()
         path = paths[0]
         cmd = [bin, path]
         try:
@@ -66,6 +56,17 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
             )
 
 
+# Function taken from https://github.com/randy3k/ProjectManager
+# Copyright (c) 2017 Randy Lai <randy.cs.lai@gmail.com>
+def get_executable():
+    executable_path = sublime.executable_path()
+    if sublime.platform() == 'osx':
+        app_path = executable_path[: executable_path.rfind('.app/') + 5]
+        executable_path = app_path + 'Contents/SharedSupport/bin/subl'
+
+    return executable_path
+
+
 def create_startupinfo():
     if os.name == 'nt':
         info = subprocess.STARTUPINFO()
@@ -73,30 +74,3 @@ def create_startupinfo():
         return info
 
     return None
-
-
-def open_settings_and_maybe_rerun(window):
-    settings = sublime.load_settings('OpenTheProject.sublime-settings')
-
-    def listen_for_settings_change():
-        settings.clear_on_change(LISTENER_KEY)
-        window.run_command('open_the_project_instead')
-
-    settings.add_on_change(LISTENER_KEY, listen_for_settings_change)
-    window.run_command(
-        'edit_settings',
-        {
-            "base_file": "${packages}/OpenTheProject/"
-            "OpenTheProject.sublime-settings",
-            "default": DEFAULT_SETTINGS,
-        },
-    )
-
-
-DEFAULT_SETTINGS = """
-// OpenTheProject Settings - User
-{
-    // Absolute path to subl[.exe] binary
-    "subl": "$0"
-}
-"""
