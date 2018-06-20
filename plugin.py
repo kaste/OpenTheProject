@@ -33,16 +33,7 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
     def run(self):
         window = self.window
 
-        if window.project_file_name():
-            window.status_message('Window already bound to a project')
-            return
-
-        folders = window.folders()
-        if not folders:
-            window.status_message('No open folder')
-            return
-
-        folder = folders[0]
+        folder = window.folders()[0]
         pattern = os.path.join(folder, '*.sublime-project')
         paths = glob(pattern)
         if not paths:
