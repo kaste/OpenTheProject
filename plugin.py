@@ -216,7 +216,10 @@ class ChooseProjectFile(sublime_plugin.ListInputHandler):
         return "project_file"
 
     def list_items(self):
-        return [
-            (os.path.basename(p)[:-16], p)
-            for p in reversed(get_paths_history()[:-1])
-        ] or ["No projects in history."]
+        return (
+            [
+                (os.path.basename(p)[:-16], p)
+                for p in reversed(get_paths_history())
+            ],
+            1,
+        ) or ["No projects in history."]
