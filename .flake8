@@ -2,6 +2,7 @@
 ; collect problems black can auto-correct
 ignore =
   D,
+  E722,
 
   ; break before or/and etc.
   W503

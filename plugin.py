@@ -1,15 +1,17 @@
-from collections import deque
+from functools import wraps
 from glob import glob
+import json
 import os
 import subprocess
 
 import sublime
 import sublime_plugin
 
-try:
-    from typing import Deque, List, Optional, Set  # noqa
-except ImportError:
-    ...
+MYPY = False
+if MYPY:
+    from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
+
+    T = TypeVar("T")
 
 
 STORAGE_FILE = "LastUsedProjects"
@@ -105,9 +107,7 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
 
 
 class open_project_in_new_window(sublime_plugin.WindowCommand):
-    def run(
-        self, project_file: str, close_current: bool = True
-    ) -> None:  # type: ignore
+    def run(self, project_file: str, close_current: bool = True) -> None:
         window = self.window
         open_wids = get_open_wids()
 
@@ -157,15 +157,58 @@ def create_startupinfo() -> "Optional[subprocess.STARTUPINFO]":
     return None
 
 
+# Type reads okay, but mypy doesn't support decorators, +1
+# https://github.com/python/mypy/issues/3157
+def eat_exceptions(f: "Callable[..., T]") -> "Callable[..., Optional[T]]":
+    @wraps(f)
+    def wrapped(*a, **kw):
+        try:
+            return f(*a)
+        except:
+            return None
+
+    return wrapped
+
+
+@eat_exceptions
+def read_json(path: str) -> "Dict[str, Any]":
+    with open(path, "r", encoding="utf8") as f:
+        return json.load(f)
+
+
+def write_json(path: str, data: "Dict[str, Any]") -> None:
+    with open(path, "w", encoding="utf8") as f:
+        json.dump(data, f, sort_keys=True, indent=4)
+
+
+def storage_file_path() -> str:
+    return os.path.join(sublime.packages_path(), "User", STORAGE_FILE)
+
+
+def read_storage_file() -> "Dict[str, Any]":
+    return read_json(storage_file_path()) or {
+        "_": "Do not edit manually; storage for OpenTheProject package",
+        "paths": [],
+    }
+
+
+def write_storage_file(data: "Dict[str, Any]") -> None:
+    write_json(storage_file_path(), data)
+
+
+def get_history(key: str) -> "Any":
+    d = read_storage_file()
+    return d[key]
+
+
+def persist_history(**kw: "Any") -> None:
+    d = read_storage_file()
+    d.update(**kw)
+    write_storage_file(d)
+
+
 def get_paths_history() -> "List[str]":
-    s = sublime.load_settings(STORAGE_FILE)
-    return s.get("paths") or []
-
-
-def persist_paths_history(paths) -> None:
-    s = sublime.load_settings(STORAGE_FILE)
-    s.set("paths", paths[-30:])
-    sublime.save_settings(STORAGE_FILE)
+    return get_history("paths")
 
 
 class RememberLastUsedProjects(sublime_plugin.EventListener):
@@ -187,7 +230,7 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
             paths.remove(project_path)
             paths.append(project_path)
 
-        persist_paths_history(paths)
+        persist_history(paths=paths)
         print("--> last_used_projects", [os.path.basename(p) for p in paths])
 
 
