@@ -231,7 +231,6 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
             paths.append(project_path)
 
         persist_history(paths=paths)
-        print("--> last_used_projects", [os.path.basename(p) for p in paths])
 
 
 class open_last_used_project(sublime_plugin.WindowCommand):
