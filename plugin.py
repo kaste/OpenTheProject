@@ -14,6 +14,7 @@ if MYPY:
     T = TypeVar("T")
 
 
+USE_BUILTIN_COMMAND = int(sublime.version()) > 4053
 STORAGE_FILE = "LastUsedProjects"
 KNOWN_WINDOWS = set()  # type: Set[sublime.WindowId]
 PROJECT_TEMPLATE = """
@@ -33,17 +34,21 @@ PROJECT_TEMPLATE = """
 
 class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
     def on_activated(self, view: sublime.View) -> None:
-        window = view.window()
-        if not window:
-            return
+        def program():
+            window = view.window()
+            if not window:
+                return
 
-        wid = window.id()
-        if wid in KNOWN_WINDOWS:
-            return
+            wid = window.id()
+            if wid in KNOWN_WINDOWS:
+                return
 
-        KNOWN_WINDOWS.add(wid)
-        window.run_command("create_std_project_file")
-        window.run_command("open_the_project_instead")
+            KNOWN_WINDOWS.add(wid)
+            window.run_command("create_std_project_file")
+            window.run_command("open_the_project_instead")
+
+        # work around ST #3370
+        sublime.set_timeout(program)
 
 
 class create_std_project_file(sublime_plugin.WindowCommand):
@@ -101,9 +106,15 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
             window.status_message("More that one project file.")
             return
 
-        window.run_command(
-            "open_project_in_new_window", {"project_file": paths[0]}
-        )
+        if USE_BUILTIN_COMMAND:
+            window.run_command(
+                "open_project_or_workspace",
+                {"file": paths[0], "new_window": False},
+            )
+        else:
+            window.run_command(
+                "open_project_in_new_window", {"project_file": paths[0]}
+            )
 
 
 class open_project_in_new_window(sublime_plugin.WindowCommand):
@@ -233,8 +244,48 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
         persist_history(paths=paths)
 
 
+EMPTY_LIST = "No projects in history."
+
+
 class open_last_used_project(sublime_plugin.WindowCommand):
-    def run(self, project_file: str) -> None:
+    def run(self, project_file: str = None) -> None:
+        if project_file is not None:
+            self.open_or_focus_project(project_file)
+            return
+
+        items = [
+            [os.path.basename(p)[:-16], p] for p in reversed(get_paths_history())
+        ]
+
+        def on_done(idx: int):
+            if idx == -1:
+                return
+
+            selected = items[idx]
+            if selected == EMPTY_LIST:
+                return
+
+            self.open_or_focus_project(selected[1])
+
+        self.window.show_quick_panel(
+            # items or [EMPTY_LIST],
+            [i[0] for i in items] or [EMPTY_LIST],
+            on_done,
+            flags=0,
+            # flags=sublime.MONOSPACE_FONT,
+            selected_index=1,
+        )
+
+    def open_or_focus_project(self, project_file: str) -> None:
+        if USE_BUILTIN_COMMAND:
+            self.window.run_command(
+                "open_project_or_workspace",
+                {"file": project_file, "new_window": True},
+            )
+        else:
+            self.impl(project_file)
+
+    def impl(self, project_file: str) -> None:
         for w in sublime.windows():
             if w.project_file_name() == project_file:
                 ag, av = w.active_group(), w.active_view()
@@ -247,21 +298,3 @@ class open_last_used_project(sublime_plugin.WindowCommand):
                 "open_project_in_new_window",
                 {"project_file": project_file, "close_current": False},
             )
-
-    def input(self, args):
-        if "project_file" not in args:
-            return ChooseProjectFile()
-
-
-class ChooseProjectFile(sublime_plugin.ListInputHandler):
-    def name(self) -> str:
-        return "project_file"
-
-    def list_items(self):
-        return (
-            [
-                (os.path.basename(p)[:-16], p)
-                for p in reversed(get_paths_history())
-            ],
-            1,
-        ) or ["No projects in history."]
