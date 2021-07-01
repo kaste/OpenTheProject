@@ -1,3 +1,4 @@
+from collections import Counter
 from functools import wraps
 from glob import glob
 import json
@@ -247,15 +248,35 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
 EMPTY_LIST = "No projects in history."
 
 
+def get_items(paths):
+    _paths = [
+        (p, components[0][:-16], components[1:])
+        for p, components in (
+            (p, list(reversed(p.split(os.sep)))) for p in paths
+        )
+    ]
+    counts = Counter(stem for path, stem, components in _paths)
+    unique = lambda stem: counts[stem] == 1  # noqa: E731
+
+    rv = []
+    for path, stem, components in reversed(_paths):
+        if unique(stem):
+            rv.append(([stem], path))
+        else:
+            rv.append(([stem] + components, path))
+
+    return [
+        [" {} ".format(os.sep).join(components), path] for components, path in rv
+    ]
+
+
 class open_last_used_project(sublime_plugin.WindowCommand):
     def run(self, project_file: str = None) -> None:
         if project_file is not None:
             self.open_or_focus_project(project_file)
             return
 
-        items = [
-            [os.path.basename(p)[:-16], p] for p in reversed(get_paths_history())
-        ]
+        items = get_items(paths)
 
         def on_done(idx: int):
             if idx == -1:
