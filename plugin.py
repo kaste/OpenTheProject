@@ -318,7 +318,7 @@ class open_last_used_project(sublime_plugin.WindowCommand):
                 w.focus_group(ag)
                 if av:
                     w.focus_view(av)
-                return
+                break
         else:
             self.window.run_command(
                 "open_project_in_new_window",
