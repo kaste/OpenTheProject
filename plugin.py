@@ -276,6 +276,11 @@ class open_last_used_project(sublime_plugin.WindowCommand):
             self.open_or_focus_project(project_file)
             return
 
+        _paths = get_paths_history()
+        paths = [p for p in _paths if os.path.exists(p)]
+        if paths != _paths:
+            persist_history(paths=paths)
+
         items = get_items(paths)
 
         def on_done(idx: int):
