@@ -35,21 +35,17 @@ PROJECT_TEMPLATE = """
 
 class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
     def on_activated(self, view: sublime.View) -> None:
-        def program():
-            window = view.window()
-            if not window:
-                return
+        window = view.window()
+        if not window:
+            return
 
-            wid = window.id()
-            if wid in KNOWN_WINDOWS:
-                return
+        wid = window.id()
+        if wid in KNOWN_WINDOWS:
+            return
 
-            KNOWN_WINDOWS.add(wid)
-            window.run_command("create_std_project_file")
-            window.run_command("open_the_project_instead")
-
-        # work around ST #3370
-        sublime.set_timeout(program)
+        KNOWN_WINDOWS.add(wid)
+        window.run_command("create_std_project_file")
+        window.run_command("open_the_project_instead")
 
 
 class create_std_project_file(sublime_plugin.WindowCommand):
