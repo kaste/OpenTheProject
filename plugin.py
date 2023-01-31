@@ -43,6 +43,9 @@ class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
         if wid in KNOWN_WINDOWS:
             return
 
+        if not window.folders():
+            return
+
         KNOWN_WINDOWS.add(wid)
         window.run_command("create_std_project_file")
         window.run_command("open_the_project_instead")
