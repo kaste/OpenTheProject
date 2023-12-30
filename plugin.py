@@ -71,15 +71,14 @@ class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
             pattern = os.path.join(folder, "*.sublime-project")
             paths = glob(pattern)
             if len(paths) == 1:
+                project_file_name = os.path.split(paths[0])[1]
                 window.status_message(
-                    "Project file '{}' already exists.".format(
-                        os.path.split(paths[0])[1]
-                    )
+                    f"Project file '{project_file_name}' already exists."
                 )
 
             elif len(paths) > 1:
                 window.status_message(
-                    "Multiple project files exist in '{}'.".format(folder)
+                    f"Multiple project files exist in '{folder}'."
                 )
 
             else:
@@ -105,18 +104,14 @@ class create_std_project_file(sublime_plugin.WindowCommand):
         basename = dirname + ".sublime-project"
         project_file_name = os.path.join(folder, basename)
         if os.path.exists(project_file_name):
-            window.status_message(
-                "Project file '{}' already exists.".format(basename)
-            )
+            window.status_message(f"Project file '{basename}' already exists.")
             return
 
         def create_project_file():
             with open(project_file_name, "w") as file:
                 file.write(PROJECT_TEMPLATE)
 
-            window.status_message(
-                "Created project file `{}`".format(project_file_name)
-            )
+            window.status_message(f"Created project file `{project_file_name}`")
             window.run_command(
                 "open_project_or_workspace",
                 {"file": project_file_name, "new_window": False},
@@ -129,7 +124,7 @@ class create_std_project_file(sublime_plugin.WindowCommand):
                     return  # 'No' or cancelled
                 create_project_file()
 
-            items = ["Create project file {!r}".format(basename), "No, thanks"]
+            items = [f"Create project file {basename!r}", "No, thanks"]
             window.show_quick_panel(
                 items, on_done, sublime.KEEP_OPEN_ON_FOCUS_LOST
             )
@@ -257,9 +252,7 @@ def get_items(paths):
         else:
             rv.append(([stem] + components, path))
 
-    return [
-        [" {} ".format(os.sep).join(components), path] for components, path in rv
-    ]
+    return [[f" {os.sep} ".join(components), path] for components, path in rv]
 
 
 class open_last_used_project(sublime_plugin.WindowCommand):
