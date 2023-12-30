@@ -268,7 +268,7 @@ class open_last_used_project(sublime_plugin.WindowCommand):
 
         items = get_items(paths)
 
-        def on_done(idx: int):
+        def on_done(idx: int, event: dict):
             if idx == -1:
                 return
 
@@ -276,19 +276,20 @@ class open_last_used_project(sublime_plugin.WindowCommand):
             if selected == EMPTY_LIST:
                 return
 
-            self.open_or_focus_project(selected[1])
+            primary = event.get("modifier_keys", {}).get("primary", False)
+            self.open_or_focus_project(selected[1], new_window=not primary)
 
         self.window.show_quick_panel(
-            # items or [EMPTY_LIST],
             [i[0] for i in items] or [EMPTY_LIST],
-            on_done,
-            flags=0,
-            # flags=sublime.MONOSPACE_FONT,
+            on_done,  # type: ignore[arg-type]
+            flags=sublime.QuickPanelFlags.WANT_EVENT,  # type: ignore[attr-defined]
             selected_index=1,
         )
 
-    def open_or_focus_project(self, project_file: str) -> None:
+    def open_or_focus_project(
+        self, project_file: str, new_window: bool = True
+    ) -> None:
         self.window.run_command(
             "open_project_or_workspace",
-            {"file": project_file, "new_window": True},
+            {"file": project_file, "new_window": new_window},
         )
