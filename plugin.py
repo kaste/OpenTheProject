@@ -47,7 +47,34 @@ class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
             return
 
         KNOWN_WINDOWS.add(wid)
-        window.run_command("create_std_project_file")
+
+        if window.project_file_name():
+            return
+
+        settings = view.settings()
+        auto_generate_projects = settings.get("auto_generate_projects", "ask")
+        if auto_generate_projects in (True, "ask"):
+            folder = window.folders()[0]
+            pattern = os.path.join(folder, "*.sublime-project")
+            paths = glob(pattern)
+            if len(paths) == 1:
+                window.status_message(
+                    "Project file '{}' already exists.".format(
+                        os.path.split(paths[0])[1]
+                    )
+                )
+
+            elif len(paths) > 1:
+                window.status_message(
+                    "Multiple project files exist in '{}'.".format(folder)
+                )
+
+            else:
+                window.run_command(
+                    "create_std_project_file",
+                    {"confirm": auto_generate_projects == "ask"},
+                )
+
         window.run_command("open_the_project_instead")
 
 
@@ -56,12 +83,11 @@ class create_std_project_file(sublime_plugin.WindowCommand):
         window = self.window
         return not window.project_file_name() and bool(window.folders())
 
-    def run(self) -> None:
+    def run(self, confirm: bool = False) -> None:
         window = self.window
 
         folder = window.folders()[0]
         dirname = os.path.basename(folder)
-
         basename = dirname + ".sublime-project"
         project_file_name = os.path.join(folder, basename)
         if os.path.exists(project_file_name):
@@ -70,12 +96,7 @@ class create_std_project_file(sublime_plugin.WindowCommand):
             )
             return
 
-        items = ["Create project file {!r}".format(basename), "No, thanks"]
-
-        def on_done(result: int) -> None:
-            if result != 0:
-                return  # 'No' or cancelled
-
+        def create_project_file():
             with open(project_file_name, "w") as file:
                 file.write(PROJECT_TEMPLATE)
 
@@ -84,7 +105,20 @@ class create_std_project_file(sublime_plugin.WindowCommand):
             )
             window.run_command("open_the_project_instead")
 
-        window.show_quick_panel(items, on_done, sublime.KEEP_OPEN_ON_FOCUS_LOST)
+        if confirm:
+
+            def on_done(result: int) -> None:
+                if result != 0:
+                    return  # 'No' or cancelled
+                create_project_file()
+
+            items = ["Create project file {!r}".format(basename), "No, thanks"]
+            window.show_quick_panel(
+                items, on_done, sublime.KEEP_OPEN_ON_FOCUS_LOST
+            )
+
+        else:
+            create_project_file()
 
 
 class open_the_project_instead(sublime_plugin.WindowCommand):
