@@ -3,7 +3,6 @@ from functools import wraps
 from glob import glob
 import json
 import os
-import subprocess
 
 import sublime
 import sublime_plugin
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 WindowId = int
 
-USE_BUILTIN_COMMAND = int(sublime.version()) > 4053
 STORAGE_FILE = "LastUsedProjects"
 KNOWN_WINDOWS = set()  # type: Set[WindowId]
 PROJECT_TEMPLATE = """
@@ -155,64 +153,10 @@ class open_the_project_instead(sublime_plugin.WindowCommand):
             window.status_message("More that one project file.")
             return
 
-        if USE_BUILTIN_COMMAND:
-            window.run_command(
-                "open_project_or_workspace",
-                {"file": paths[0], "new_window": False},
-            )
-        else:
-            window.run_command(
-                "open_project_in_new_window", {"project_file": paths[0]}
-            )
-
-
-class open_project_in_new_window(sublime_plugin.WindowCommand):
-    def run(self, project_file: str, close_current: bool = True) -> None:
-        window = self.window
-        open_wids = get_open_wids()
-
-        bin = get_executable()
-        cmd = [bin, "-p", project_file]
-        subprocess.Popen(cmd, startupinfo=create_startupinfo())
-
-        if close_current:
-            sublime.set_timeout(lambda: close_window(window.id(), open_wids))
-
-
-def get_open_wids() -> Set[WindowId]:
-    return {w.id() for w in sublime.windows()}
-
-
-def close_window(wid: "WindowId", open_wids: "Set[WindowId]") -> None:
-    current_wids = get_open_wids()
-    if wid not in current_wids:
-        return
-
-    if current_wids != open_wids:
-        window = sublime.Window(wid)
-        window.run_command("close_window")
-
-    sublime.set_timeout(lambda: close_window(wid, open_wids))
-
-
-# Function taken from https://github.com/randy3k/ProjectManager
-# Copyright (c) 2017 Randy Lai <randy.cs.lai@gmail.com>
-def get_executable() -> str:
-    executable_path = sublime.executable_path()
-    if sublime.platform() == "osx":
-        app_path = executable_path[: executable_path.rfind(".app/") + 5]
-        executable_path = app_path + "Contents/SharedSupport/bin/subl"
-
-    return executable_path
-
-
-def create_startupinfo() -> Optional[subprocess.STARTUPINFO]:
-    if os.name == "nt":
-        info = subprocess.STARTUPINFO()
-        info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        return info
-
-    return None
+        window.run_command(
+            "open_project_or_workspace",
+            {"file": paths[0], "new_window": False},
+        )
 
 
 def eat_exceptions(f: "Callable[P, T]") -> "Callable[P, Optional[T]]":
@@ -347,24 +291,7 @@ class open_last_used_project(sublime_plugin.WindowCommand):
         )
 
     def open_or_focus_project(self, project_file: str) -> None:
-        if USE_BUILTIN_COMMAND:
-            self.window.run_command(
-                "open_project_or_workspace",
-                {"file": project_file, "new_window": True},
-            )
-        else:
-            self.impl(project_file)
-
-    def impl(self, project_file: str) -> None:
-        for w in sublime.windows():
-            if w.project_file_name() == project_file:
-                ag, av = w.active_group(), w.active_view()
-                w.focus_group(ag)
-                if av:
-                    w.focus_view(av)
-                break
-        else:
-            self.window.run_command(
-                "open_project_in_new_window",
-                {"project_file": project_file, "close_current": False},
-            )
+        self.window.run_command(
+            "open_project_or_workspace",
+            {"file": project_file, "new_window": True},
+        )
