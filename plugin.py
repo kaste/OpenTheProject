@@ -8,16 +8,28 @@ import subprocess
 import sublime
 import sublime_plugin
 
-MYPY = False
-if MYPY:
-    from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    TypeVar,
+    TYPE_CHECKING,
+)
 
-    T = TypeVar("T")
+if TYPE_CHECKING:
+    from typing_extensions import ParamSpec
 
+    P = ParamSpec("P")
+
+T = TypeVar("T")
+WindowId = int
 
 USE_BUILTIN_COMMAND = int(sublime.version()) > 4053
 STORAGE_FILE = "LastUsedProjects"
-KNOWN_WINDOWS = set()  # type: Set[sublime.WindowId]
+KNOWN_WINDOWS = set()  # type: Set[WindowId]
 PROJECT_TEMPLATE = """
 {
     "folders": [
@@ -167,13 +179,11 @@ class open_project_in_new_window(sublime_plugin.WindowCommand):
             sublime.set_timeout(lambda: close_window(window.id(), open_wids))
 
 
-def get_open_wids() -> "Set[sublime.WindowId]":
+def get_open_wids() -> Set[WindowId]:
     return {w.id() for w in sublime.windows()}
 
 
-def close_window(
-    wid: "sublime.WindowId", open_wids: "Set[sublime.WindowId]"
-) -> None:
+def close_window(wid: "WindowId", open_wids: "Set[WindowId]") -> None:
     current_wids = get_open_wids()
     if wid not in current_wids:
         return
@@ -196,7 +206,7 @@ def get_executable() -> str:
     return executable_path
 
 
-def create_startupinfo() -> "Optional[subprocess.STARTUPINFO]":
+def create_startupinfo() -> Optional[subprocess.STARTUPINFO]:
     if os.name == "nt":
         info = subprocess.STARTUPINFO()
         info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -205,9 +215,7 @@ def create_startupinfo() -> "Optional[subprocess.STARTUPINFO]":
     return None
 
 
-# Type reads okay, but mypy doesn't support decorators, +1
-# https://github.com/python/mypy/issues/3157
-def eat_exceptions(f: "Callable[..., T]") -> "Callable[..., Optional[T]]":
+def eat_exceptions(f: "Callable[P, T]") -> "Callable[P, Optional[T]]":
     @wraps(f)
     def wrapped(*a, **kw):
         try:
@@ -219,12 +227,12 @@ def eat_exceptions(f: "Callable[..., T]") -> "Callable[..., Optional[T]]":
 
 
 @eat_exceptions
-def read_json(path: str) -> "Dict[str, Any]":
+def read_json(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf8") as f:
         return json.load(f)
 
 
-def write_json(path: str, data: "Dict[str, Any]") -> None:
+def write_json(path: str, data: Dict[str, Any]) -> None:
     with open(path, "w", encoding="utf8") as f:
         json.dump(data, f, sort_keys=True, indent=4)
 
@@ -233,23 +241,23 @@ def storage_file_path() -> str:
     return os.path.join(sublime.packages_path(), "User", STORAGE_FILE)
 
 
-def read_storage_file() -> "Dict[str, Any]":
+def read_storage_file() -> Dict[str, Any]:
     return read_json(storage_file_path()) or {
         "_": "Do not edit manually; storage for OpenTheProject package",
         "paths": [],
     }
 
 
-def write_storage_file(data: "Dict[str, Any]") -> None:
+def write_storage_file(data: Dict[str, Any]) -> None:
     write_json(storage_file_path(), data)
 
 
-def get_history(key: str) -> "Any":
+def get_history(key: str) -> Any:
     d = read_storage_file()
     return d[key]
 
 
-def persist_history(**kw: "Any") -> None:
+def persist_history(**kw: Any) -> None:
     d = read_storage_file()
     d.update(**kw)
     write_storage_file(d)
