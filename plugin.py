@@ -34,6 +34,9 @@ PROJECT_TEMPLATE = """
 
 
 class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
+    # Use `on_activated` as we actually wait for a folder to get attached
+    # to the window.  See `window.folders()` is checked *before* we register
+    # the window as "known".
     def on_activated(self, view: sublime.View) -> None:
         window = view.window()
         if not window:
