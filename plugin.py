@@ -87,6 +87,7 @@ class AutomaticallyOpenFolderAsProject(sublime_plugin.EventListener):
                     "create_std_project_file",
                     {"confirm": auto_generate_projects == "ask"},
                 )
+                return
 
         window.run_command("open_the_project_instead")
 
