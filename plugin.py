@@ -116,7 +116,10 @@ class create_std_project_file(sublime_plugin.WindowCommand):
             window.status_message(
                 "Created project file `{}`".format(project_file_name)
             )
-            window.run_command("open_the_project_instead")
+            window.run_command(
+                "open_project_or_workspace",
+                {"file": project_file_name, "new_window": False},
+            )
 
         if confirm:
 
