@@ -232,10 +232,13 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
         persist_history(paths=paths)
 
 
-EMPTY_LIST = "No projects in history."
+NEW_WINDOW_DEFAULT = True
+NOT_SET = object()
+WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
+PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
 
 
-def get_items(paths):
+def get_items(paths: List[str], open_projects: List[str]):
     _paths = [
         (p, stem, components[1:])
         for p, components in (
@@ -252,7 +255,8 @@ def get_items(paths):
     rv = []
     for path, stem, components in reversed(_paths):
         if unique(stem):
-            rv.append(([stem], path))
+            display_name = stem
+
         else:
             others = [
                 components_
@@ -265,58 +269,102 @@ def get_items(paths):
                 if any(p != part for p in other_parts):
                     break
 
-            rv.append(
-                (
-                    [stem]
-                    + (
-                        # Often the project file ("stem") is the same as the
-                        # folder name, omit the duplication then.
-                        reduced_components[1:]
-                        if reduced_components[0] == stem
-                        else reduced_components
-                    ),
-                    path,
-                )
+            display_name = f" {os.sep} ".join(
+                [stem]
+                + (
+                    # Often the project file ("stem") is the same as the
+                    # folder name, omit the duplication then.
+                    reduced_components[1:]
+                    if reduced_components[0] == stem
+                    else reduced_components
+                ),
             )
 
-    return [[f" {os.sep} ".join(components), path] for components, path in rv]
+        rv.append(
+            sublime.ListInputItem(
+                text=display_name,
+                value=path,
+                kind=(WINDOW_KIND if path in open_projects else PROJECT_KIND),
+            )
+        )
+
+    return rv
 
 
-class open_last_used_project(sublime_plugin.WindowCommand):
-    def run(self, project_file: str = None) -> None:
-        if project_file is not None:
-            self.open_or_focus_project(project_file)
-            return
+class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[name-defined]
+    def __init__(self, empty_list_message, confirm_modifier, new_window_default):
+        self.empty_list_message = empty_list_message
+        self._confirm_modifier = confirm_modifier
+        self._new_window_default = new_window_default
+        self._open_projects = [
+            project_file_name
+            for w in sublime.windows()
+            if (project_file_name := w.project_file_name())
+        ]
 
+    def preview(self, text) -> str:
+        if text in self._open_projects:
+            return "[enter] to switch to window"
+
+        if self._new_window_default:
+            return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
+        else:
+            return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
+
+    def list_items(self):
         _paths = get_paths_history()
         paths = [p for p in _paths if os.path.exists(p)]
         if paths != _paths:
             persist_history(paths=paths)
 
-        items = get_items(paths)
-
-        def on_done(idx: int, event: dict):
-            if idx == -1:
-                return
-
-            selected = items[idx]
-            if selected == EMPTY_LIST:
-                return
-
-            primary = event.get("modifier_keys", {}).get("primary", False)
-            self.open_or_focus_project(selected[1], new_window=not primary)
-
-        self.window.show_quick_panel(
-            [i[0] for i in items] or [EMPTY_LIST],
-            on_done,  # type: ignore[arg-type]
-            flags=sublime.QuickPanelFlags.WANT_EVENT,  # type: ignore[attr-defined]
-            selected_index=1,
+        return (
+            get_items(paths, self._open_projects)
+            if paths
+            else [self.empty_list_message],
+            1,
         )
 
-    def open_or_focus_project(
-        self, project_file: str, new_window: bool = True
-    ) -> None:
+    def want_event(self):
+        return True
+
+    def confirm(self, text, event):
+        self._confirm_modifier(event.get("modifier_keys", {}))
+
+    def validate(self, text: str, event):
+        return True
+
+
+class open_last_used_project(sublime_plugin.WindowCommand):
+    new_window = NOT_SET
+    EMPTY_LIST_MESSAGE = "No projects in history."
+
+    def input_description(self):
+        return "Switch to"
+
+    def input(self, args):
+        if "project_file" not in args:
+
+            def confirm_modifier(key_modifiers):
+                alt_action = key_modifiers.get("primary", False)
+                self.new_window = (
+                    not new_window_default if alt_action else new_window_default
+                )
+
+            new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
+            return ProjectFileInputHandler(
+                self.EMPTY_LIST_MESSAGE, confirm_modifier, new_window_default
+            )
+
+    def run(self, project_file: str, new_window=NEW_WINDOW_DEFAULT) -> None:
+        if project_file == self.EMPTY_LIST_MESSAGE:
+            return
+
         self.window.run_command(
             "open_project_or_workspace",
-            {"file": project_file, "new_window": new_window},
+            {
+                "file": project_file,
+                "new_window": (
+                    new_window if self.new_window is NOT_SET else self.new_window
+                ),
+            },
         )
