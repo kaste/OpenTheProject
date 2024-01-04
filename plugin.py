@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import defaultdict
 from functools import wraps
 from glob import glob
 import json
@@ -237,20 +237,47 @@ EMPTY_LIST = "No projects in history."
 
 def get_items(paths):
     _paths = [
-        (p, components[0][:-16], components[1:])
+        (p, stem, components[1:])
         for p, components in (
             (p, list(reversed(p.split(os.sep)))) for p in paths
         )
+        if (stem := components[0][:-16])
     ]
-    counts = Counter(stem for path, stem, components in _paths)
-    unique = lambda stem: counts[stem] == 1  # noqa: E731
+
+    grouped_by_stem = defaultdict(list)
+    for path, stem, components in _paths:
+        grouped_by_stem[stem].append((path, components))
+    unique = lambda stem: len(grouped_by_stem[stem]) == 1  # noqa: E731
 
     rv = []
     for path, stem, components in reversed(_paths):
         if unique(stem):
             rv.append(([stem], path))
         else:
-            rv.append(([stem] + components, path))
+            others = [
+                components_
+                for path_, components_ in grouped_by_stem[stem]
+                if path_ != path
+            ]
+            reduced_components = []
+            for part, *other_parts in zip(*(components, *others)):
+                reduced_components.append(part)
+                if any(p != part for p in other_parts):
+                    break
+
+            rv.append(
+                (
+                    [stem]
+                    + (
+                        # Often the project file ("stem") is the same as the
+                        # folder name, omit the duplication then.
+                        reduced_components[1:]
+                        if reduced_components[0] == stem
+                        else reduced_components
+                    ),
+                    path,
+                )
+            )
 
     return [[f" {os.sep} ".join(components), path] for components, path in rv]
 
