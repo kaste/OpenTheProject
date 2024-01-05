@@ -336,18 +336,19 @@ def list_input_handler(
 
 def ask_for_project_file(args, kont):
     default_action = args.get("action", DEFAULT_ACTION)
-    omit_temporarily = args.get("omit_temporarily", [])
+    assume_closed = args.get("assume_closed", None)
     selected_index = args.get("selected_index", 1)
 
     _paths = get_paths_history()
     paths = [p for p in _paths if os.path.exists(p)]
     if paths != _paths:
         persist_history(paths=paths)
-    paths = [p for p in reversed(paths) if p not in omit_temporarily]
+    paths = list(reversed(paths))
     open_projects = [
         project_file_name
         for w in sublime.windows()
         if (project_file_name := w.project_file_name())
+        if (project_file_name != assume_closed)
     ]
     items = format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
 
@@ -355,7 +356,7 @@ def ask_for_project_file(args, kont):
         if text is None:
             return None
         elif text in open_projects:
-            return "[enter] to switch to window"
+            return "[enter] to switch to window, [alt+enter] to close it"
 
         if default_action == "open":
             return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
@@ -412,7 +413,7 @@ class open_last_used_project(sublime_plugin.WindowCommand):
         self,
         project_file: Optional[str],
         action=DEFAULT_ACTION,
-        omit_temporarily: List[str] = [],
+        assume_closed: Optional[str] = None,
         selected_index: int = 1,
     ) -> None:
         if project_file is None:
@@ -422,12 +423,12 @@ class open_last_used_project(sublime_plugin.WindowCommand):
             for w in sublime.windows():
                 if w.project_file_name() == project_file:
                     w.run_command("close_window")
-                    omit_temporarily = omit_temporarily + [project_file]
+                    assume_closed = project_file
                     break
             self.window.run_command(
                 "open_last_used_project",
                 {
-                    "omit_temporarily": omit_temporarily,
+                    "assume_closed": assume_closed,
                     "selected_index": selected_index,
                 },
             )
