@@ -240,7 +240,7 @@ PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
 EMPTY_LIST_ITEM = sublime.ListInputItem(text=EMPTY_LIST_MESSAGE, value=None)
 
 
-def get_items(paths: List[str], open_projects: List[str]):
+def format_items(paths: List[str], open_projects: List[str]):
     _paths = [
         (p, stem, components[1:])
         for p, components in (
@@ -255,7 +255,7 @@ def get_items(paths: List[str], open_projects: List[str]):
     unique = lambda stem: len(grouped_by_stem[stem]) == 1  # noqa: E731
 
     rv = []
-    for path, stem, components in reversed(_paths):
+    for path, stem, components in _paths:
         if unique(stem):
             display_name = stem
 
@@ -294,9 +294,13 @@ def get_items(paths: List[str], open_projects: List[str]):
 
 
 class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[name-defined]
-    def __init__(self, confirm_modifier, new_window_default):
+    def __init__(
+        self, items, confirm_modifier, new_window_default, selected_index
+    ):
+        self._items = items
         self._confirm_modifier = confirm_modifier
         self._new_window_default = new_window_default
+        self._selected_index = selected_index
         self._open_projects = [
             project_file_name
             for w in sublime.windows()
@@ -315,58 +319,89 @@ class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
 
     def list_items(self):
-        _paths = get_paths_history()
-        paths = [p for p in _paths if os.path.exists(p)]
-        if paths != _paths:
-            persist_history(paths=paths)
-
         return (
-            get_items(paths, self._open_projects)
-            if paths
+            format_items(self._items, self._open_projects)
+            if self._items
             else [EMPTY_LIST_ITEM],
-            1,
+            self._selected_index,
         )
 
     def want_event(self):
         return True
 
     def confirm(self, text, event):
-        self._confirm_modifier(event.get("modifier_keys", {}))
+        self._confirm_modifier(text, event.get("modifier_keys", {}))
 
     def validate(self, text: str, event):
         return True
 
 
 class open_last_used_project(sublime_plugin.WindowCommand):
-    new_window = NOT_SET
+    confirm_event = None
 
     def input_description(self):
         return "Switch to"
 
     def input(self, args):
         if "project_file" not in args:
-
-            def confirm_modifier(key_modifiers):
-                alt_action = key_modifiers.get("primary", False)
-                self.new_window = (
-                    not new_window_default if alt_action else new_window_default
-                )
-
             new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
-            return ProjectFileInputHandler(confirm_modifier, new_window_default)
+            omit_temporarily = args.get("omit_temporarily", [])
+            selected_index = args.get("selected_index", 1)
+
+            _paths = get_paths_history()
+            paths = [p for p in _paths if os.path.exists(p)]
+            if paths != _paths:
+                persist_history(paths=paths)
+            paths = [p for p in reversed(paths) if p not in omit_temporarily]
+
+            def confirm_modifier(text, modifiers):
+                selected_index = next(
+                    (idx for idx, p in enumerate(paths) if p == text), 1
+                )
+                self.confirm_event = (text, modifiers, selected_index)
+
+            return ProjectFileInputHandler(
+                paths, confirm_modifier, new_window_default, selected_index
+            )
 
     def run(
-        self, project_file: Optional[str], new_window=NEW_WINDOW_DEFAULT
+        self,
+        project_file: Optional[str],
+        new_window=NEW_WINDOW_DEFAULT,
+        omit_temporarily: List[str] = [],
+        selected_index: int = 1,
     ) -> None:
         if project_file is None:
             return
+
+        confirm_event, self.confirm_event = self.confirm_event, None
+
+        if confirm_event:
+            text, modifiers, selected_index = confirm_event
+
+            if modifiers.get("alt"):
+                active_window = self.window
+                for w in sublime.windows():
+                    if w.project_file_name() == project_file:
+                        w.run_command("close_window")
+                        omit_temporarily += [project_file]
+                        break
+                active_window.run_command(
+                    "open_last_used_project",
+                    {
+                        "omit_temporarily": omit_temporarily,
+                        "selected_index": selected_index,
+                    },
+                )
+                return
+
+            primary_pressed = modifiers.get("primary")
+            new_window = not new_window if primary_pressed else new_window
 
         self.window.run_command(
             "open_project_or_workspace",
             {
                 "file": project_file,
-                "new_window": (
-                    new_window if self.new_window is NOT_SET else self.new_window
-                ),
+                "new_window": new_window,
             },
         )
