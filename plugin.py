@@ -395,11 +395,7 @@ class open_last_used_project(sublime_plugin.WindowCommand):
 
     def input(self, args):
         if "project_file" not in args:
-
-            def on_done(new_args):
-                self.new_args = new_args
-
-            return ask_for_project_file(args, on_done)
+            return ask_for_project_file(args, self.new_args.update)
 
     def run_(self, edit_token, args):
         args = self.filter_args(args)
