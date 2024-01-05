@@ -293,6 +293,14 @@ def format_items(paths: List[str], open_projects: List[str]):
     return rv
 
 
+def value_of(item):
+    if isinstance(item, (list, tuple)):
+        return item[1]
+    if isinstance(item, sublime.ListInputItem):
+        return item.value
+    return item
+
+
 def list_input_handler(
     name,
     items,
@@ -304,13 +312,17 @@ def list_input_handler(
 ):
     _want_event = want_event
     _next_input = next_input
+    _items = NOT_SET if callable(items) else items
 
     class ListInputHandler(sublime_plugin.ListInputHandler):
         def name(self):
             return name
 
         def list_items(self):
-            return (items, selected_index)
+            nonlocal _items
+            if _items is NOT_SET:
+                _items = items()
+            return (_items, selected_index)
 
         if _want_event:
 
@@ -326,7 +338,15 @@ def list_input_handler(
         if on_select:
 
             def confirm(self, text, event):
-                on_select(text, event.get("modifier_keys", {}))
+                selected_index = next(
+                    (
+                        idx
+                        for idx, item in enumerate(_items)
+                        if text == value_of(item)
+                    ),
+                    None,
+                )
+                on_select(text, event.get("modifier_keys", {}), selected_index)
 
         if on_highlight:
 
@@ -346,18 +366,20 @@ def ask_for_project_file(args, kont):
     assume_closed = args.get("assume_closed", None)
     selected_index = args.get("selected_index", 1)
 
-    _paths = get_paths_history()
-    paths = [p for p in _paths if os.path.exists(p)]
-    if paths != _paths:
-        persist_history(paths=paths)
-    paths = list(reversed(paths))
     open_projects = [
         project_file_name
         for w in sublime.windows()
         if (project_file_name := w.project_file_name())
         if (project_file_name != assume_closed)
     ]
-    items = format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
+
+    def get_items():
+        _paths = get_paths_history()
+        paths = [p for p in _paths if os.path.exists(p)]
+        if paths != _paths:
+            persist_history(paths=paths)
+        paths = list(reversed(paths))
+        return format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
 
     def preview(text):
         if text is None:
@@ -370,10 +392,7 @@ def ask_for_project_file(args, kont):
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
 
-    def on_done(text, modifiers):
-        selected_index = next(
-            (idx for idx, p in enumerate(paths) if p == text), 1
-        )
+    def on_done(text, modifiers, selected_index):
         if modifiers.get("alt"):
             action = "close"
         elif modifiers.get("primary"):
@@ -385,12 +404,14 @@ def ask_for_project_file(args, kont):
             {
                 "project_file": text,
                 "action": action,
-                "selected_index": selected_index,
+                "selected_index": (
+                    1 if selected_index is None else selected_index
+                ),
             }
         )
 
     return list_input_handler(
-        "project_file", items, on_done, selected_index, preview
+        "project_file", get_items, on_done, selected_index, preview
     )
 
 
