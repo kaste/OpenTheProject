@@ -233,7 +233,7 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
 
 
 EMPTY_LIST_MESSAGE = "No projects in history."
-NEW_WINDOW_DEFAULT = True
+DEFAULT_ACTION = "open"
 NOT_SET = object()
 WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
 PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
@@ -335,7 +335,7 @@ def list_input_handler(
 
 
 def ask_for_project_file(args, kont):
-    new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
+    default_action = args.get("action", DEFAULT_ACTION)
     omit_temporarily = args.get("omit_temporarily", [])
     selected_index = args.get("selected_index", 1)
 
@@ -357,7 +357,7 @@ def ask_for_project_file(args, kont):
         elif text in open_projects:
             return "[enter] to switch to window"
 
-        if new_window_default:
+        if default_action == "open":
             return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
@@ -366,7 +366,20 @@ def ask_for_project_file(args, kont):
         selected_index = next(
             (idx for idx, p in enumerate(paths) if p == text), 1
         )
-        kont(text, modifiers, selected_index)
+        if modifiers.get("alt"):
+            action = "close"
+        elif modifiers.get("primary"):
+            action = "switch" if default_action == "open" else "open"
+        else:
+            action = default_action
+
+        kont(
+            {
+                "project_file": text,
+                "action": action,
+                "selected_index": selected_index,
+            }
+        )
 
     return list_input_handler(
         "project_file", items, on_done, selected_index, preview
@@ -374,7 +387,7 @@ def ask_for_project_file(args, kont):
 
 
 class open_last_used_project(sublime_plugin.WindowCommand):
-    confirm_event = None
+    new_args: Dict[str, Any] = {}
 
     def input_description(self):
         return "Switch to"
@@ -382,49 +395,48 @@ class open_last_used_project(sublime_plugin.WindowCommand):
     def input(self, args):
         if "project_file" not in args:
 
-            def on_done(project_file, modifiers, selected_index):
-                self.confirm_event = (project_file, modifiers, selected_index)
+            def on_done(new_args):
+                self.new_args = new_args
 
             return ask_for_project_file(args, on_done)
+
+    def run_(self, edit_token, args):
+        args = self.filter_args(args)
+        if args is None:
+            args = {}
+
+        new_args, self.new_args = self.new_args, {}
+        return super().run_(edit_token, {**args, **new_args})
 
     def run(
         self,
         project_file: Optional[str],
-        new_window=NEW_WINDOW_DEFAULT,
+        action=DEFAULT_ACTION,
         omit_temporarily: List[str] = [],
         selected_index: int = 1,
     ) -> None:
         if project_file is None:
             return
 
-        confirm_event, self.confirm_event = self.confirm_event, None
+        if action == "close":
+            for w in sublime.windows():
+                if w.project_file_name() == project_file:
+                    w.run_command("close_window")
+                    omit_temporarily = omit_temporarily + [project_file]
+                    break
+            self.window.run_command(
+                "open_last_used_project",
+                {
+                    "omit_temporarily": omit_temporarily,
+                    "selected_index": selected_index,
+                },
+            )
 
-        if confirm_event:
-            text, modifiers, selected_index = confirm_event
-
-            if modifiers.get("alt"):
-                active_window = self.window
-                for w in sublime.windows():
-                    if w.project_file_name() == project_file:
-                        w.run_command("close_window")
-                        omit_temporarily += [project_file]
-                        break
-                active_window.run_command(
-                    "open_last_used_project",
-                    {
-                        "omit_temporarily": omit_temporarily,
-                        "selected_index": selected_index,
-                    },
-                )
-                return
-
-            primary_pressed = modifiers.get("primary")
-            new_window = not new_window if primary_pressed else new_window
-
-        self.window.run_command(
-            "open_project_or_workspace",
-            {
-                "file": project_file,
-                "new_window": new_window,
-            },
-        )
+        else:
+            self.window.run_command(
+                "open_project_or_workspace",
+                {
+                    "file": project_file,
+                    "new_window": True if action == "open" else False,
+                },
+            )
