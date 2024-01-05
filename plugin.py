@@ -300,8 +300,10 @@ def list_input_handler(
     selected_index=0,
     on_highlight=None,
     want_event=True,
+    next_input=None,
 ):
     _want_event = want_event
+    _next_input = next_input
 
     class ListInputHandler(sublime_plugin.ListInputHandler):
         def name(self):
@@ -330,6 +332,11 @@ def list_input_handler(
 
             def preview(self, text) -> Optional[str]:
                 return on_highlight(text)
+
+        if _next_input:
+
+            def next_input(self, args):
+                return _next_input(args)
 
     return ListInputHandler()
 
