@@ -334,6 +334,45 @@ def list_input_handler(
     return ListInputHandler()
 
 
+def ask_for_project_file(args, kont):
+    new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
+    omit_temporarily = args.get("omit_temporarily", [])
+    selected_index = args.get("selected_index", 1)
+
+    _paths = get_paths_history()
+    paths = [p for p in _paths if os.path.exists(p)]
+    if paths != _paths:
+        persist_history(paths=paths)
+    paths = [p for p in reversed(paths) if p not in omit_temporarily]
+    open_projects = [
+        project_file_name
+        for w in sublime.windows()
+        if (project_file_name := w.project_file_name())
+    ]
+    items = format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
+
+    def preview(text):
+        if text is None:
+            return None
+        elif text in open_projects:
+            return "[enter] to switch to window"
+
+        if new_window_default:
+            return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
+        else:
+            return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
+
+    def on_done(text, modifiers):
+        selected_index = next(
+            (idx for idx, p in enumerate(paths) if p == text), 1
+        )
+        kont(text, modifiers, selected_index)
+
+    return list_input_handler(
+        "project_file", items, on_done, selected_index, preview
+    )
+
+
 class open_last_used_project(sublime_plugin.WindowCommand):
     confirm_event = None
 
@@ -342,46 +381,11 @@ class open_last_used_project(sublime_plugin.WindowCommand):
 
     def input(self, args):
         if "project_file" not in args:
-            new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
-            omit_temporarily = args.get("omit_temporarily", [])
-            selected_index = args.get("selected_index", 1)
 
-            _paths = get_paths_history()
-            paths = [p for p in _paths if os.path.exists(p)]
-            if paths != _paths:
-                persist_history(paths=paths)
-            paths = [p for p in reversed(paths) if p not in omit_temporarily]
-            open_projects = [
-                project_file_name
-                for w in sublime.windows()
-                if (project_file_name := w.project_file_name())
-            ]
-            items = (
-                format_items(paths, open_projects)
-                if paths
-                else [EMPTY_LIST_ITEM]
-            )
+            def on_done(project_file, modifiers, selected_index):
+                self.confirm_event = (project_file, modifiers, selected_index)
 
-            def preview(text):
-                if text is None:
-                    return None
-                elif text in open_projects:
-                    return "[enter] to switch to window"
-
-                if new_window_default:
-                    return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
-                else:
-                    return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
-
-            def on_done(text, modifiers):
-                selected_index = next(
-                    (idx for idx, p in enumerate(paths) if p == text), 1
-                )
-                self.confirm_event = (text, modifiers, selected_index)
-
-            return list_input_handler(
-                "project_file", items, on_done, selected_index, preview
-            )
+            return ask_for_project_file(args, on_done)
 
     def run(
         self,
