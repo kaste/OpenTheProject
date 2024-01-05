@@ -293,47 +293,45 @@ def format_items(paths: List[str], open_projects: List[str]):
     return rv
 
 
-class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[name-defined]
-    def __init__(
-        self, items, confirm_modifier, new_window_default, selected_index
-    ):
-        self._items = items
-        self._confirm_modifier = confirm_modifier
-        self._new_window_default = new_window_default
-        self._selected_index = selected_index
-        self._open_projects = [
-            project_file_name
-            for w in sublime.windows()
-            if (project_file_name := w.project_file_name())
-        ]
+def list_input_handler(
+    name,
+    items,
+    on_select=None,
+    selected_index=0,
+    on_highlight=None,
+    want_event=True,
+):
+    _want_event = want_event
 
-    def preview(self, text) -> Optional[str]:
-        if text is None:
-            return None
-        elif text in self._open_projects:
-            return "[enter] to switch to window"
+    class ListInputHandler(sublime_plugin.ListInputHandler):
+        def name(self):
+            return name
 
-        if self._new_window_default:
-            return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
-        else:
-            return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
+        def list_items(self):
+            return (items, selected_index)
 
-    def list_items(self):
-        return (
-            format_items(self._items, self._open_projects)
-            if self._items
-            else [EMPTY_LIST_ITEM],
-            self._selected_index,
-        )
+        if _want_event:
 
-    def want_event(self):
-        return True
+            def want_event(self):
+                return True
 
-    def confirm(self, text, event):
-        self._confirm_modifier(text, event.get("modifier_keys", {}))
+            def validate(self, text: str, event: dict = None):
+                return True
 
-    def validate(self, text: str, event):
-        return True
+            def confirm(self, text, event):
+                pass
+
+        if on_select:
+
+            def confirm(self, text, event):
+                on_select(text, event.get("modifier_keys", {}))
+
+        if on_highlight:
+
+            def preview(self, text) -> Optional[str]:
+                return on_highlight(text)
+
+    return ListInputHandler()
 
 
 class open_last_used_project(sublime_plugin.WindowCommand):
@@ -353,15 +351,36 @@ class open_last_used_project(sublime_plugin.WindowCommand):
             if paths != _paths:
                 persist_history(paths=paths)
             paths = [p for p in reversed(paths) if p not in omit_temporarily]
+            open_projects = [
+                project_file_name
+                for w in sublime.windows()
+                if (project_file_name := w.project_file_name())
+            ]
+            items = (
+                format_items(paths, open_projects)
+                if paths
+                else [EMPTY_LIST_ITEM]
+            )
 
-            def confirm_modifier(text, modifiers):
+            def preview(text):
+                if text is None:
+                    return None
+                elif text in open_projects:
+                    return "[enter] to switch to window"
+
+                if new_window_default:
+                    return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
+                else:
+                    return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
+
+            def on_done(text, modifiers):
                 selected_index = next(
                     (idx for idx, p in enumerate(paths) if p == text), 1
                 )
                 self.confirm_event = (text, modifiers, selected_index)
 
-            return ProjectFileInputHandler(
-                paths, confirm_modifier, new_window_default, selected_index
+            return list_input_handler(
+                "project_file", items, on_done, selected_index, preview
             )
 
     def run(
