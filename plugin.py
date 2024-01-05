@@ -387,15 +387,8 @@ def ask_for_project_file(args, kont):
     )
 
 
-class open_last_used_project(sublime_plugin.WindowCommand):
+class WithArgsFromInputHandler(sublime_plugin.Command):
     new_args: Dict[str, Any] = {}
-
-    def input_description(self):
-        return "Switch to"
-
-    def input(self, args):
-        if "project_file" not in args:
-            return ask_for_project_file(args, self.new_args.update)
 
     def run_(self, edit_token, args):
         args = self.filter_args(args)
@@ -404,6 +397,17 @@ class open_last_used_project(sublime_plugin.WindowCommand):
 
         new_args, self.new_args = self.new_args, {}
         return super().run_(edit_token, {**args, **new_args})
+
+
+class open_last_used_project(
+    WithArgsFromInputHandler, sublime_plugin.WindowCommand
+):
+    def input_description(self):
+        return "Switch to"
+
+    def input(self, args):
+        if "project_file" not in args:
+            return ask_for_project_file(args, self.new_args.update)
 
     def run(
         self,
