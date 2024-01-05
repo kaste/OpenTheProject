@@ -232,10 +232,12 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
         persist_history(paths=paths)
 
 
+EMPTY_LIST_MESSAGE = "No projects in history."
 NEW_WINDOW_DEFAULT = True
 NOT_SET = object()
 WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
 PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
+EMPTY_LIST_ITEM = sublime.ListInputItem(text=EMPTY_LIST_MESSAGE, value=None)
 
 
 def get_items(paths: List[str], open_projects: List[str]):
@@ -292,8 +294,7 @@ def get_items(paths: List[str], open_projects: List[str]):
 
 
 class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[name-defined]
-    def __init__(self, empty_list_message, confirm_modifier, new_window_default):
-        self.empty_list_message = empty_list_message
+    def __init__(self, confirm_modifier, new_window_default):
         self._confirm_modifier = confirm_modifier
         self._new_window_default = new_window_default
         self._open_projects = [
@@ -302,8 +303,10 @@ class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[
             if (project_file_name := w.project_file_name())
         ]
 
-    def preview(self, text) -> str:
-        if text in self._open_projects:
+    def preview(self, text) -> Optional[str]:
+        if text is None:
+            return None
+        elif text in self._open_projects:
             return "[enter] to switch to window"
 
         if self._new_window_default:
@@ -320,7 +323,7 @@ class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[
         return (
             get_items(paths, self._open_projects)
             if paths
-            else [self.empty_list_message],
+            else [EMPTY_LIST_ITEM],
             1,
         )
 
@@ -336,7 +339,6 @@ class ProjectFileInputHandler(sublime_plugin.ListInputHandler):  # type: ignore[
 
 class open_last_used_project(sublime_plugin.WindowCommand):
     new_window = NOT_SET
-    EMPTY_LIST_MESSAGE = "No projects in history."
 
     def input_description(self):
         return "Switch to"
@@ -351,12 +353,12 @@ class open_last_used_project(sublime_plugin.WindowCommand):
                 )
 
             new_window_default = args.get("new_window", NEW_WINDOW_DEFAULT)
-            return ProjectFileInputHandler(
-                self.EMPTY_LIST_MESSAGE, confirm_modifier, new_window_default
-            )
+            return ProjectFileInputHandler(confirm_modifier, new_window_default)
 
-    def run(self, project_file: str, new_window=NEW_WINDOW_DEFAULT) -> None:
-        if project_file == self.EMPTY_LIST_MESSAGE:
+    def run(
+        self, project_file: Optional[str], new_window=NEW_WINDOW_DEFAULT
+    ) -> None:
+        if project_file is None:
             return
 
         self.window.run_command(
