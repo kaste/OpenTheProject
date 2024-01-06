@@ -33,9 +33,12 @@ This is similar to the built in "Quick Switch Project" but suppresses workspace
 files (because ~~nobody uses~~I don't use them[1]). It uses a standard quick panel
 which just works perfectly.  Use `ctrl+enter` to switch projects, reusing the window,
 and `enter` to focus or open a new window.  As the most recently used project is
-selected by default, this allows for e.g. `ctrl+o, ctrl+enter` to switch between the two recent projects very quickly.
+selected by default, this allows for e.g. `ctrl+o, ctrl+enter` to switch between the
+two recent projects very quickly. As a bonus `alt+enter` closes a project that is
+already open which makes tyding up your desktop a bit faster.
 
-(It also cleans up quickly as it hides unreachable folders. 👋)
+(The list also cleans up quickly as it hides unreachable folders.  "Quick Switch Project"
+feels like an evergrowing list. 👋)
 
 This feature transparently saves its state to "User/LastUsedProjects".  You shouldn't edit this
 file probably.
