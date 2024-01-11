@@ -1,7 +1,8 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import wraps
+from functools import lru_cache, wraps
 from glob import glob
+import inspect
 import json
 import os
 
@@ -235,7 +236,6 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
 
 
 EMPTY_LIST_MESSAGE = "No projects in history."
-NEW_WINDOW_DEFAULT = True
 NOT_SET = object()
 CANCEL_COMMAND = object()
 WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
@@ -413,7 +413,7 @@ def list_input_handler(
 
 
 def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
-    new_window = args.get("new_window", NEW_WINDOW_DEFAULT)
+    new_window = args.get("new_window")
 
     open_projects = [
         project_file_name
@@ -512,7 +512,8 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
 
         for arg_name, handler in self.input_handlers.items():
             if arg_name not in args:
-                return handler(self, args)
+                args_with_defaults = {**default_args(self.run), **args}
+                return handler(self, args_with_defaults)
 
 
 def run_command(cmd):
@@ -523,17 +524,28 @@ def run_command(cmd):
     return sublime.run_command
 
 
+def default_args(fn):
+    # type: (Callable) -> Dict[str, object]
+    return {
+        name: parameter.default
+        for name, parameter in _signature(fn).parameters.items()
+        if parameter.default is not inspect.Parameter.empty
+    }
+
+
+@lru_cache()
+def _signature(fn):
+    # type: (Callable) -> inspect.Signature
+    return inspect.signature(fn)
+
+
 class open_last_used_project(
     WithArgsFromInputHandler, sublime_plugin.WindowCommand
 ):
     crumb = "Switch to"
     input_handlers = {"project_file": ask_for_project_file}
 
-    def run(
-        self,
-        project_file: str,
-        new_window: bool = NEW_WINDOW_DEFAULT,
-    ) -> None:
+    def run(self, project_file: str, new_window: bool = True) -> None:
         self.window.run_command(
             "open_project_or_workspace",
             {
