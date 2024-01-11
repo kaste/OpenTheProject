@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import wraps
 from glob import glob
 import json
@@ -306,6 +307,20 @@ def value_of(item):
 State: DefaultDict[sublime_plugin.Command, Dict] = defaultdict(dict)
 
 
+@dataclass(frozen=True)
+class Modifiers:
+    primary: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    altgr: bool = False
+    shift: bool = False
+    super: bool = False
+
+    @classmethod
+    def from_event(cls, event):
+        return cls(**event.get("modifier_keys", {}))
+
+
 def list_input_handler(
     name,
     cmd,
@@ -368,9 +383,8 @@ def list_input_handler(
                     done_called = True
                     kont(*args, **kwargs)
 
-                on_select(
-                    text, event.get("modifier_keys", {}), selected_index, done
-                )
+                modifiers = Modifiers.from_event(event)
+                on_select(text, modifiers, selected_index, done)
                 if not done_called:
                     kont(CANCEL_COMMAND)
 
@@ -416,11 +430,11 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
 
-    def on_done(project_file, modifiers, selected_index, kont):
+    def on_done(project_file, modifiers: Modifiers, selected_index, kont):
         if not project_file:
             return
 
-        if modifiers.get("alt"):
+        if modifiers.alt:
             assume_closed = None
             for w in sublime.windows():
                 if w.project_file_name() == project_file:
@@ -437,7 +451,7 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
             )
             return
 
-        new_window_ = not new_window if modifiers.get("primary") else new_window
+        new_window_ = not new_window if modifiers.primary else new_window
         kont(project_file, {"new_window": new_window_})
 
     return list_input_handler(
