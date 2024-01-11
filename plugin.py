@@ -529,12 +529,9 @@ class open_last_used_project(
 
     def run(
         self,
-        project_file: Optional[str],
-        new_window=NEW_WINDOW_DEFAULT,
+        project_file: str,
+        new_window: bool = NEW_WINDOW_DEFAULT,
     ) -> None:
-        if project_file is None:
-            return
-
         self.window.run_command(
             "open_project_or_workspace",
             {
