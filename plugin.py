@@ -361,7 +361,7 @@ def list_input_handler(
     return ListInputHandler()
 
 
-def ask_for_project_file(args, kont):
+def ask_for_project_file(cmd, args):
     default_action = args.get("action", DEFAULT_ACTION)
     assume_closed = args.get("assume_closed", None)
     selected_index = args.get("selected_index", 1)
@@ -410,6 +410,9 @@ def ask_for_project_file(args, kont):
             }
         )
 
+    def kont(new_args):
+        cmd.new_args.update(new_args)
+
     return list_input_handler(
         "project_file", get_items, on_done, selected_index, preview
     )
@@ -435,7 +438,7 @@ class open_last_used_project(
 
     def input(self, args):
         if "project_file" not in args:
-            return ask_for_project_file(args, self.new_args.update)
+            return ask_for_project_file(self, args)
 
     def run(
         self,
