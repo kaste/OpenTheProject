@@ -236,6 +236,7 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
 EMPTY_LIST_MESSAGE = "No projects in history."
 DEFAULT_ACTION = "open"
 NOT_SET = object()
+CANCEL_COMMAND = object()
 WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
 PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
 EMPTY_LIST_ITEM = sublime.ListInputItem(text=EMPTY_LIST_MESSAGE, value=None)
@@ -319,8 +320,14 @@ def list_input_handler(
     _next_input = next_input
     _items = NOT_SET if callable(items) else items
 
-    def kont(new_args):
-        State[cmd].setdefault("new_args", {}).update(new_args)
+    def kont(first_arg, rest=None):
+        if first_arg is CANCEL_COMMAND:
+            State[cmd]["cancel"] = True
+        elif isinstance(first_arg, sublime_plugin.ListInputHandler):
+            State[cmd]["next_handler"] = first_arg
+        else:
+            new_args = {name: first_arg, **rest}
+            State[cmd].setdefault("new_args", {}).update(new_args)
 
     class ListInputHandler(sublime_plugin.ListInputHandler):
         def name(self):
@@ -354,9 +361,18 @@ def list_input_handler(
                     ),
                     None,
                 )
+                done_called = False
+
+                def done(*args, **kwargs):
+                    nonlocal done_called
+                    done_called = True
+                    kont(*args, **kwargs)
+
                 on_select(
-                    text, event.get("modifier_keys", {}), selected_index, kont
+                    text, event.get("modifier_keys", {}), selected_index, done
                 )
+                if not done_called:
+                    kont(CANCEL_COMMAND)
 
         if on_highlight:
 
@@ -371,10 +387,8 @@ def list_input_handler(
     return ListInputHandler()
 
 
-def ask_for_project_file(cmd, args):
+def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
     default_action = args.get("action", DEFAULT_ACTION)
-    assume_closed = args.get("assume_closed", None)
-    selected_index = args.get("selected_index", 1)
 
     open_projects = [
         project_file_name
@@ -402,23 +416,33 @@ def ask_for_project_file(cmd, args):
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
 
-    def on_done(text, modifiers, selected_index, kont):
+    def on_done(project_file, modifiers, selected_index, kont):
+        if not project_file:
+            return
+
         if modifiers.get("alt"):
-            action = "close"
-        elif modifiers.get("primary"):
+            assume_closed = None
+            for w in sublime.windows():
+                if w.project_file_name() == project_file:
+                    w.run_command("close_window")
+                    assume_closed = project_file
+                    break
+            kont(
+                ask_for_project_file(
+                    cmd,
+                    args,
+                    assume_closed=assume_closed,
+                    selected_index=selected_index,
+                )
+            )
+            return
+
+        if modifiers.get("primary"):
             action = "switch" if default_action == "open" else "open"
         else:
             action = default_action
 
-        kont(
-            {
-                "project_file": text,
-                "action": action,
-                "selected_index": (
-                    1 if selected_index is None else selected_index
-                ),
-            }
-        )
+        kont(project_file, {"action": action})
 
     return list_input_handler(
         "project_file", cmd, get_items, on_done, selected_index, preview
@@ -438,13 +462,40 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
         if args is None:
             args = {}
 
+        if State[self].pop("cancel", False):
+            return
+
+        next_handler = State[self].get("next_handler", None)
+        if next_handler:
+            run_command(self)(
+                "show_overlay",
+                {
+                    "overlay": "command_palette",
+                    "command": self.name(),
+                    "args": args,
+                },
+            )
+            return
+
         new_args = State[self].pop("new_args", {})
         return super().run_(edit_token, {**args, **new_args})
 
     def input(self, args):
+        next_handler = State[self].pop("next_handler", None)
+        if next_handler:
+            return next_handler
+
         for arg_name, handler in self.input_handlers.items():
             if arg_name not in args:
                 return handler(self, args)
+
+
+def run_command(cmd):
+    if isinstance(cmd, sublime_plugin.TextCommand):
+        return cmd.view.run_command
+    if isinstance(cmd, sublime_plugin.WindowCommand):
+        return cmd.window.run_command
+    return sublime.run_command
 
 
 class open_last_used_project(
@@ -459,31 +510,14 @@ class open_last_used_project(
         self,
         project_file: Optional[str],
         action=DEFAULT_ACTION,
-        assume_closed: Optional[str] = None,
-        selected_index: int = 1,
     ) -> None:
         if project_file is None:
             return
 
-        if action == "close":
-            for w in sublime.windows():
-                if w.project_file_name() == project_file:
-                    w.run_command("close_window")
-                    assume_closed = project_file
-                    break
-            self.window.run_command(
-                "open_last_used_project",
-                {
-                    "assume_closed": assume_closed,
-                    "selected_index": selected_index,
-                },
-            )
-
-        else:
-            self.window.run_command(
-                "open_project_or_workspace",
-                {
-                    "file": project_file,
-                    "new_window": True if action == "open" else False,
-                },
-            )
+        self.window.run_command(
+            "open_project_or_workspace",
+            {
+                "file": project_file,
+                "new_window": True if action == "open" else False,
+            },
+        )
