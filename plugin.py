@@ -303,6 +303,7 @@ def value_of(item):
 
 def list_input_handler(
     name,
+    cmd,
     items,
     on_select=None,
     selected_index=0,
@@ -313,6 +314,9 @@ def list_input_handler(
     _want_event = want_event
     _next_input = next_input
     _items = NOT_SET if callable(items) else items
+
+    def kont(new_args):
+        cmd.new_args.update(new_args)
 
     class ListInputHandler(sublime_plugin.ListInputHandler):
         def name(self):
@@ -346,7 +350,9 @@ def list_input_handler(
                     ),
                     None,
                 )
-                on_select(text, event.get("modifier_keys", {}), selected_index)
+                on_select(
+                    text, event.get("modifier_keys", {}), selected_index, kont
+                )
 
         if on_highlight:
 
@@ -392,7 +398,7 @@ def ask_for_project_file(cmd, args):
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
 
-    def on_done(text, modifiers, selected_index):
+    def on_done(text, modifiers, selected_index, kont):
         if modifiers.get("alt"):
             action = "close"
         elif modifiers.get("primary"):
@@ -410,11 +416,8 @@ def ask_for_project_file(cmd, args):
             }
         )
 
-    def kont(new_args):
-        cmd.new_args.update(new_args)
-
     return list_input_handler(
-        "project_file", get_items, on_done, selected_index, preview
+        "project_file", cmd, get_items, on_done, selected_index, preview
     )
 
 
