@@ -334,12 +334,19 @@ def list_input_handler(
     _want_event = want_event
     _next_input = next_input
     _items = NOT_SET if callable(items) else items
+    _next_handler = None
 
     def kont(first_arg, rest=None):
         if first_arg is CANCEL_COMMAND:
             State[cmd]["cancel"] = True
+
         elif isinstance(first_arg, sublime_plugin.ListInputHandler):
-            State[cmd]["next_handler"] = first_arg
+            nonlocal _next_handler
+            if rest and rest.get("push", False):
+                _next_handler = first_arg
+            else:
+                State[cmd]["next_handler"] = first_arg
+
         else:
             new_args = {name: first_arg, **rest}
             State[cmd].setdefault("new_args", {}).update(new_args)
@@ -393,9 +400,13 @@ def list_input_handler(
             def preview(self, text) -> Optional[str]:
                 return on_highlight(text)
 
-        if _next_input:
+        def next_input(self, args):
+            nonlocal _next_handler
+            next_handler, _next_handler = _next_handler, None
+            if next_handler:
+                return next_handler
 
-            def next_input(self, args):
+            if _next_input:
                 return _next_input(args)
 
     return ListInputHandler()
