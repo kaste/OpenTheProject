@@ -234,7 +234,7 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
 
 
 EMPTY_LIST_MESSAGE = "No projects in history."
-DEFAULT_ACTION = "open"
+NEW_WINDOW_DEFAULT = True
 NOT_SET = object()
 CANCEL_COMMAND = object()
 WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
@@ -388,7 +388,7 @@ def list_input_handler(
 
 
 def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
-    default_action = args.get("action", DEFAULT_ACTION)
+    new_window = args.get("new_window", NEW_WINDOW_DEFAULT)
 
     open_projects = [
         project_file_name
@@ -411,7 +411,7 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
         elif text in open_projects:
             return "[enter] to switch to window, [alt+enter] to close it"
 
-        if default_action == "open":
+        if new_window:
             return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
         else:
             return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
@@ -437,12 +437,8 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
             )
             return
 
-        if modifiers.get("primary"):
-            action = "switch" if default_action == "open" else "open"
-        else:
-            action = default_action
-
-        kont(project_file, {"action": action})
+        new_window_ = not new_window if modifiers.get("primary") else new_window
+        kont(project_file, {"new_window": new_window_})
 
     return list_input_handler(
         "project_file", cmd, get_items, on_done, selected_index, preview
@@ -509,7 +505,7 @@ class open_last_used_project(
     def run(
         self,
         project_file: Optional[str],
-        action=DEFAULT_ACTION,
+        new_window=NEW_WINDOW_DEFAULT,
     ) -> None:
         if project_file is None:
             return
@@ -518,6 +514,6 @@ class open_last_used_project(
             "open_project_or_workspace",
             {
                 "file": project_file,
-                "new_window": True if action == "open" else False,
+                "new_window": new_window,
             },
         )
