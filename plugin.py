@@ -10,6 +10,7 @@ import sublime_plugin
 from typing import (
     Any,
     Callable,
+    DefaultDict,
     Dict,
     List,
     Optional,
@@ -301,6 +302,9 @@ def value_of(item):
     return item
 
 
+State: DefaultDict[sublime_plugin.Command, Dict] = defaultdict(dict)
+
+
 def list_input_handler(
     name,
     cmd,
@@ -316,7 +320,7 @@ def list_input_handler(
     _items = NOT_SET if callable(items) else items
 
     def kont(new_args):
-        cmd.new_args.update(new_args)
+        State[cmd].setdefault("new_args", {}).update(new_args)
 
     class ListInputHandler(sublime_plugin.ListInputHandler):
         def name(self):
@@ -422,7 +426,6 @@ def ask_for_project_file(cmd, args):
 
 
 class WithArgsFromInputHandler(sublime_plugin.Command):
-    new_args: Dict[str, Any] = {}
     input_handlers: Dict[
         str,
         Callable[
@@ -435,7 +438,7 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
         if args is None:
             args = {}
 
-        new_args, self.new_args = self.new_args, {}
+        new_args = State[self].pop("new_args", {})
         return super().run_(edit_token, {**args, **new_args})
 
     def input(self, args):
