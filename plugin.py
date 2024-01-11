@@ -471,6 +471,7 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
 
 
 class WithArgsFromInputHandler(sublime_plugin.Command):
+    crumb = ""
     input_handlers: Dict[
         str,
         Callable[
@@ -501,6 +502,9 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
         new_args = State[self].pop("new_args", {})
         return super().run_(edit_token, {**args, **new_args})
 
+    def input_description(self) -> str:
+        return self.crumb
+
     def input(self, args):
         next_handler = State[self].pop("next_handler", None)
         if next_handler:
@@ -522,10 +526,8 @@ def run_command(cmd):
 class open_last_used_project(
     WithArgsFromInputHandler, sublime_plugin.WindowCommand
 ):
+    crumb = "Switch to"
     input_handlers = {"project_file": ask_for_project_file}
-
-    def input_description(self):
-        return "Switch to"
 
     def run(
         self,
