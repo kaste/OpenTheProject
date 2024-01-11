@@ -235,65 +235,8 @@ class RememberLastUsedProjects(sublime_plugin.EventListener):
         persist_history(paths=paths)
 
 
-EMPTY_LIST_MESSAGE = "No projects in history."
 NOT_SET = object()
 CANCEL_COMMAND = object()
-WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
-PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
-EMPTY_LIST_ITEM = sublime.ListInputItem(text=EMPTY_LIST_MESSAGE, value=None)
-
-
-def format_items(paths: List[str], open_projects: List[str]):
-    _paths = [
-        (p, stem, components[1:])
-        for p, components in (
-            (p, list(reversed(p.split(os.sep)))) for p in paths
-        )
-        if (stem := components[0][:-16])
-    ]
-
-    grouped_by_stem = defaultdict(list)
-    for path, stem, components in _paths:
-        grouped_by_stem[stem].append((path, components))
-    unique = lambda stem: len(grouped_by_stem[stem]) == 1  # noqa: E731
-
-    rv = []
-    for path, stem, components in _paths:
-        if unique(stem):
-            display_name = stem
-
-        else:
-            others = [
-                components_
-                for path_, components_ in grouped_by_stem[stem]
-                if path_ != path
-            ]
-            reduced_components = []
-            for part, *other_parts in zip(*(components, *others)):
-                reduced_components.append(part)
-                if any(p != part for p in other_parts):
-                    break
-
-            display_name = f" {os.sep} ".join(
-                [stem]
-                + (
-                    # Often the project file ("stem") is the same as the
-                    # folder name, omit the duplication then.
-                    reduced_components[1:]
-                    if reduced_components[0] == stem
-                    else reduced_components
-                ),
-            )
-
-        rv.append(
-            sublime.ListInputItem(
-                text=display_name,
-                value=path,
-                kind=(WINDOW_KIND if path in open_projects else PROJECT_KIND),
-            )
-        )
-
-    return rv
 
 
 def value_of(item):
@@ -412,64 +355,6 @@ def list_input_handler(
     return ListInputHandler()
 
 
-def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
-    new_window = args.get("new_window")
-
-    open_projects = [
-        project_file_name
-        for w in sublime.windows()
-        if (project_file_name := w.project_file_name())
-        if (project_file_name != assume_closed)
-    ]
-
-    def get_items():
-        _paths = get_paths_history()
-        paths = [p for p in _paths if os.path.exists(p)]
-        if paths != _paths:
-            persist_history(paths=paths)
-        paths = list(reversed(paths))
-        return format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
-
-    def preview(text):
-        if text is None:
-            return None
-        elif text in open_projects:
-            return "[enter] to switch to window, [alt+enter] to close it"
-
-        if new_window:
-            return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
-        else:
-            return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
-
-    def on_done(project_file, modifiers: Modifiers, selected_index, kont):
-        if not project_file:
-            return
-
-        if modifiers.alt:
-            assume_closed = None
-            for w in sublime.windows():
-                if w.project_file_name() == project_file:
-                    w.run_command("close_window")
-                    assume_closed = project_file
-                    break
-            kont(
-                ask_for_project_file(
-                    cmd,
-                    args,
-                    assume_closed=assume_closed,
-                    selected_index=selected_index,
-                )
-            )
-            return
-
-        new_window_ = not new_window if modifiers.primary else new_window
-        kont(project_file, {"new_window": new_window_})
-
-    return list_input_handler(
-        "project_file", cmd, get_items, on_done, selected_index, preview
-    )
-
-
 class WithArgsFromInputHandler(sublime_plugin.Command):
     crumb = ""
     input_handlers: Dict[
@@ -537,6 +422,123 @@ def default_args(fn):
 def _signature(fn):
     # type: (Callable) -> inspect.Signature
     return inspect.signature(fn)
+
+
+EMPTY_LIST_MESSAGE = "No projects in history."
+WINDOW_KIND = [sublime.KIND_ID_COLOR_ORANGISH, "W", "Window"]
+PROJECT_KIND = [sublime.KIND_ID_NAMESPACE, "P", "Project"]
+EMPTY_LIST_ITEM = sublime.ListInputItem(text=EMPTY_LIST_MESSAGE, value=None)
+
+
+def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
+    new_window = args.get("new_window")
+
+    open_projects = [
+        project_file_name
+        for w in sublime.windows()
+        if (project_file_name := w.project_file_name())
+        if (project_file_name != assume_closed)
+    ]
+
+    def get_items():
+        _paths = get_paths_history()
+        paths = [p for p in _paths if os.path.exists(p)]
+        if paths != _paths:
+            persist_history(paths=paths)
+        paths = list(reversed(paths))
+        return format_items(paths, open_projects) if paths else [EMPTY_LIST_ITEM]
+
+    def preview(text):
+        if text is None:
+            return None
+        elif text in open_projects:
+            return "[enter] to switch to window, [alt+enter] to close it"
+
+        if new_window:
+            return "[ctrl+enter] to switch projects, [enter] to keep separate windows"
+        else:
+            return "[enter] to switch projects, [ctrl+enter] to keep separate windows"
+
+    def on_done(project_file, modifiers: Modifiers, selected_index, kont):
+        if not project_file:
+            return
+
+        if modifiers.alt:
+            assume_closed = None
+            for w in sublime.windows():
+                if w.project_file_name() == project_file:
+                    w.run_command("close_window")
+                    assume_closed = project_file
+                    break
+            kont(
+                ask_for_project_file(
+                    cmd,
+                    args,
+                    assume_closed=assume_closed,
+                    selected_index=selected_index,
+                )
+            )
+            return
+
+        new_window_ = not new_window if modifiers.primary else new_window
+        kont(project_file, {"new_window": new_window_})
+
+    return list_input_handler(
+        "project_file", cmd, get_items, on_done, selected_index, preview
+    )
+
+
+def format_items(paths: List[str], open_projects: List[str]):
+    _paths = [
+        (p, stem, components[1:])
+        for p, components in (
+            (p, list(reversed(p.split(os.sep)))) for p in paths
+        )
+        if (stem := components[0][:-16])
+    ]
+
+    grouped_by_stem = defaultdict(list)
+    for path, stem, components in _paths:
+        grouped_by_stem[stem].append((path, components))
+    unique = lambda stem: len(grouped_by_stem[stem]) == 1  # noqa: E731
+
+    rv = []
+    for path, stem, components in _paths:
+        if unique(stem):
+            display_name = stem
+
+        else:
+            others = [
+                components_
+                for path_, components_ in grouped_by_stem[stem]
+                if path_ != path
+            ]
+            reduced_components = []
+            for part, *other_parts in zip(*(components, *others)):
+                reduced_components.append(part)
+                if any(p != part for p in other_parts):
+                    break
+
+            display_name = f" {os.sep} ".join(
+                [stem]
+                + (
+                    # Often the project file ("stem") is the same as the
+                    # folder name, omit the duplication then.
+                    reduced_components[1:]
+                    if reduced_components[0] == stem
+                    else reduced_components
+                ),
+            )
+
+        rv.append(
+            sublime.ListInputItem(
+                text=display_name,
+                value=path,
+                kind=(WINDOW_KIND if path in open_projects else PROJECT_KIND),
+            )
+        )
+
+    return rv
 
 
 class open_last_used_project(
