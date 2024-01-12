@@ -247,6 +247,10 @@ def value_of(item):
     return item
 
 
+def run_select(cmd):
+    run_command(cmd)("select")
+
+
 State: DefaultDict[sublime_plugin.Command, Dict] = defaultdict(dict)
 
 
@@ -275,6 +279,7 @@ def list_input_handler(
     want_event=True,
     next_input=None,
     placeholder="",
+    resolve_with=None,
 ):
     _want_event = want_event
     _next_input = next_input
@@ -305,6 +310,11 @@ def list_input_handler(
             nonlocal _items
             if _items is NOT_SET:
                 _items = items()
+            if resolve_with is not None:
+                for item in _items:
+                    if value_of(item) == resolve_with:
+                        sublime.set_timeout(lambda: run_select(cmd))
+                        return ([item], 0)
             return (_items, selected_index)
 
         if _want_event:
