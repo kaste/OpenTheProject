@@ -269,6 +269,7 @@ def list_input_handler(
     cmd,
     items,
     on_select=None,
+    *,
     selected_index=0,
     on_highlight=None,
     want_event=True,
@@ -484,7 +485,12 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
         kont(project_file, {"new_window": new_window_})
 
     return list_input_handler(
-        "project_file", cmd, get_items, on_done, selected_index, preview
+        "project_file",
+        cmd,
+        get_items,
+        on_done,
+        selected_index=selected_index,
+        on_highlight=preview,
     )
 
 
