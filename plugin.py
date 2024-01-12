@@ -247,10 +247,6 @@ def value_of(item):
     return item
 
 
-def run_select(cmd):
-    run_command(cmd)("select")
-
-
 State: DefaultDict[sublime_plugin.Command, Dict] = defaultdict(dict)
 
 
@@ -342,7 +338,7 @@ def list_input_handler(
             if resolve_with is not None:
                 for item in _items:
                     if value_of(item) == resolve_with:
-                        sublime.set_timeout(lambda: run_select(cmd))
+                        sublime.set_timeout(lambda: run_cmd(cmd, "select"))
                         return ([item], 0)
             return (_items, selected_index)
 
@@ -413,7 +409,8 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
 
         next_handler = State[self].get("next_handler", None)
         if next_handler:
-            run_command(self)(
+            run_cmd(
+                self,
                 "show_overlay",
                 {
                     "overlay": "command_palette",
@@ -440,12 +437,16 @@ class WithArgsFromInputHandler(sublime_plugin.Command):
                 return handler(self, args_with_defaults)
 
 
-def run_command(cmd):
+def get_run_command_for(cmd):
     if isinstance(cmd, sublime_plugin.TextCommand):
         return cmd.view.run_command
     if isinstance(cmd, sublime_plugin.WindowCommand):
         return cmd.window.run_command
     return sublime.run_command
+
+
+def run_cmd(cmd, cmd_name, args=None):
+    get_run_command_for(cmd)(cmd_name, args)
 
 
 def default_args(fn):
