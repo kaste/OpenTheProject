@@ -268,6 +268,27 @@ class Modifiers:
         return cls(**event.get("modifier_keys", {}))
 
 
+def const(value):
+    return lambda *args, **kwargs: value
+
+
+class DescriptiveInputHandler(type):
+    def __init__(cls, cls_name, bases, attrs):
+        for attr_name in (
+            "name",
+            "want_event",
+            "placeholder",
+            "initial_text",
+            "initial_selection",
+            "preview",
+            "validate",
+            "next_input",
+        ):
+            value = attrs.get(attr_name)
+            if not callable(value):
+                setattr(cls, attr_name, const(value))
+
+
 def list_input_handler(
     name,
     cmd,
@@ -276,14 +297,17 @@ def list_input_handler(
     *,
     selected_index=0,
     on_highlight=None,
-    want_event=True,
     next_input=None,
     placeholder="",
+    initial_text="",
+    initial_selection=[],
     resolve_with=None,
 ):
-    _want_event = want_event
+    _name = name
     _next_input = next_input
     _placeholder = placeholder
+    _initial_text = initial_text
+    _initial_selection = initial_selection
     _items = NOT_SET if callable(items) else items
     _next_handler = None
 
@@ -302,9 +326,14 @@ def list_input_handler(
             new_args = {name: first_arg, **rest}
             State[cmd].setdefault("new_args", {}).update(new_args)
 
-    class ListInputHandler(sublime_plugin.ListInputHandler):
-        def name(self):
-            return name
+    class ListInputHandler(
+        sublime_plugin.ListInputHandler, metaclass=DescriptiveInputHandler
+    ):
+        name = _name
+        want_event = True
+        placeholder = _placeholder
+        initial_text = _initial_text
+        initial_selection = _initial_selection
 
         def list_items(self):
             nonlocal _items
@@ -317,16 +346,8 @@ def list_input_handler(
                         return ([item], 0)
             return (_items, selected_index)
 
-        if _want_event:
-
-            def want_event(self):
-                return True
-
-            def validate(self, text: str, event: dict = None):
-                return True
-
-            def confirm(self, text, event):
-                pass
+        def validate(self, text, event=None):
+            return True
 
         if on_select:
 
@@ -351,6 +372,11 @@ def list_input_handler(
                 if not done_called:
                     kont(CANCEL_COMMAND)
 
+        else:
+
+            def confirm(self, text, event=None):  # type: ignore[misc]
+                pass
+
         if on_highlight:
 
             def preview(self, text) -> Optional[str]:
@@ -364,11 +390,6 @@ def list_input_handler(
 
             if _next_input:
                 return _next_input(args)
-
-        if _placeholder:
-
-            def placeholder(self):
-                return _placeholder
 
     return ListInputHandler()
 
