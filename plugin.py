@@ -274,9 +274,11 @@ def list_input_handler(
     on_highlight=None,
     want_event=True,
     next_input=None,
+    placeholder="",
 ):
     _want_event = want_event
     _next_input = next_input
+    _placeholder = placeholder
     _items = NOT_SET if callable(items) else items
     _next_handler = None
 
@@ -352,6 +354,11 @@ def list_input_handler(
 
             if _next_input:
                 return _next_input(args)
+
+        if _placeholder:
+
+            def placeholder(self):
+                return _placeholder
 
     return ListInputHandler()
 
@@ -491,6 +498,7 @@ def ask_for_project_file(cmd, args, assume_closed=None, selected_index=1):
         on_done,
         selected_index=selected_index,
         on_highlight=preview,
+        placeholder="Choose a project",
     )
 
 
