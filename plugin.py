@@ -166,7 +166,7 @@ def eat_exceptions(f: "Callable[P, T]") -> "Callable[P, Optional[T]]":
     def wrapped(*a, **kw):
         try:
             return f(*a)
-        except:
+        except Exception:
             return None
 
     return wrapped
