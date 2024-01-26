@@ -30,7 +30,7 @@ T = TypeVar("T")
 WindowId = int
 
 STORAGE_FILE = "LastUsedProjects"
-KNOWN_WINDOWS = set()  # type: Set[WindowId]
+KNOWN_WINDOWS: Set[WindowId] = set()
 PROJECT_TEMPLATE = """
 {
     "folders": [
